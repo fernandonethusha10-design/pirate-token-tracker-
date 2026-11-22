@@ -1,0 +1,247 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="theme-color" content="#0a1128">
+<title>Pirate Token Tracker</title>
+<style>
+  * { margin:0; padding:0; box-sizing:border-box; }
+  body { font-family:'Segoe UI',Arial,sans-serif; background:#0a1128; color:#e8e8f0; min-height:100vh; padding:20px; }
+  .wrap { max-width:900px; margin:0 auto; }
+  h1 { color:#ffd700; text-align:center; margin-bottom:6px; }
+  .sub { text-align:center; color:#8899bb; margin-bottom:24px; font-size:.9rem; }
+  .card { background:#131b3d; border:1px solid #253268; border-radius:12px; padding:20px; margin-bottom:20px; }
+  .card h2 { color:#ffd700; font-size:1.1rem; margin-bottom:14px; }
+  .grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(140px,1fr)); gap:12px; }
+  .stat { background:#0a1128; border-radius:10px; padding:14px; text-align:center; }
+  .stat .num { font-size:1.6rem; font-weight:bold; color:#ffd700; overflow-wrap:anywhere; }
+  .stat .lbl { font-size:.75rem; color:#8899bb; margin-top:4px; }
+  .bigbtns { display:flex; gap:10px; justify-content:center; flex-wrap:wrap; margin:16px 0 4px; }
+  button { background:#ffd700; color:#0a1128; border:none; border-radius:8px; padding:14px 24px; font-size:1rem; font-weight:bold; cursor:pointer; }
+  button:hover { background:#ffe75c; }
+  button.ghost { background:#253268; color:#e8e8f0; }
+  button:focus-visible, input:focus-visible, select:focus-visible { outline:2px solid #ffd700; outline-offset:2px; }
+  input, select { background:#0a1128; border:1px solid #253268; color:#e8e8f0; border-radius:8px; padding:10px; font-size:1rem; width:100%; min-width:0; }
+  label { display:block; color:#8899bb; font-size:.8rem; margin:10px 0 4px; }
+  .squadrow { display:flex; gap:8px; align-items:center; margin-bottom:8px; }
+  .squadrow input { flex:1; }
+  .squadrow button.ghost { padding:8px 14px; font-size:.85rem; white-space:nowrap; }
+  .log { font-size:.85rem; color:#aab4d4; max-height:180px; overflow-y:auto; }
+  .log div { padding:4px 0; border-bottom:1px solid #1c2650; }
+  .log span { color:#ffd700; }
+  .note { color:#8899bb; font-size:.78rem; margin-top:10px; line-height:1.5; }
+  @media (max-width:560px) {
+    body { padding:12px; }
+    .card { padding:15px; }
+    .squadrow { flex-wrap:wrap; }
+    .squadrow button { flex-shrink:0; }
+    .bigbtns button { flex:1 1 42%; padding:12px 10px; }
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>⚓ Pirate Token Tracker</h1>
+  <p class="sub">Treasure Hunters · Track your chest runs and squad progress</p>
+
+  <div class="card">
+    <h2>Chest-Run Tracker</h2>
+    <div class="grid">
+      <div class="stat"><div class="num" id="chests">0</div><div class="lbl">Chests opened</div></div>
+      <div class="stat"><div class="num" id="chance">0.00%</div><div class="lbl">Estimated chance</div></div>
+      <div class="stat"><div class="num" id="matches">0</div><div class="lbl">Matches logged</div></div>
+      <div class="stat"><div class="num" id="rate">1 / 137,500</div><div class="lbl">Assumed odds</div></div>
+    </div>
+    <div class="bigbtns">
+      <button type="button" onclick="addChest(1)">+1 Chest</button>
+      <button type="button" onclick="addChest(5)">+5</button>
+      <button type="button" onclick="addChest(8)">+8</button>
+      <button class="ghost" type="button" onclick="logMatch()">End match → log</button>
+    </div>
+    <label for="matchChests">Log match result</label>
+    <div class="squadrow">
+      <input id="matchChests" type="number" min="0" step="1" placeholder="Chests opened this match">
+      <button class="ghost" type="button" onclick="quickMatch()">Add</button>
+    </div>
+    <div class="log" id="log" aria-live="polite"></div>
+    <p class="note">You can sync the number with your in-game quest progress. This tracker stores data in this browser on this device.</p>
+    <div class="squadrow" style="margin-top:8px">
+      <input id="setTotal" type="number" min="0" step="1" placeholder="Set your total chest count">
+      <button class="ghost" type="button" onclick="setTotalFn()">Sync total</button>
+    </div>
+  </div>
+
+  <div class="card">
+    <h2>Squad Split</h2>
+    <div id="squadList"></div>
+    <div class="squadrow">
+      <input id="mateName" maxlength="40" placeholder="Teammate name">
+      <button class="ghost" type="button" onclick="addMate()">+ Add teammate</button>
+    </div>
+    <div class="grid" style="margin-top:12px">
+      <div class="stat"><div class="num" id="squadChests">0</div><div class="lbl">Team chests</div></div>
+      <div class="stat"><div class="num" id="squadChance">0.00%</div><div class="lbl">Estimated team chance</div></div>
+    </div>
+    <p class="note">Enter each teammate's chest total. The team estimate assumes independent chest chances and the same drop rate for everyone.</p>
+  </div>
+
+  <div class="card">
+    <h2>Treasure Hour Countdown</h2>
+    <label for="boost">Optional boosted odds assumption</label>
+    <div class="squadrow">
+      <select id="boost">
+        <option value="1.5">1.5× boost assumption</option>
+        <option value="2">2.0× boost assumption</option>
+      </select>
+      <input id="hourDate" type="date" aria-label="Treasure Hour date">
+      <input id="hourTime" type="time" aria-label="Treasure Hour time">
+      <button class="ghost" type="button" onclick="setHour()">Set</button>
+    </div>
+    <div class="stat" style="margin-top:12px"><div class="num" id="countdown">Not set</div><div class="lbl">Until next Treasure Hour</div></div>
+    <p class="note">Enter the announced start time in Eastern Time (ET). The countdown is a personal reminder; check official Fortnite announcements for event times and actual drop-rate details.</p>
+  </div>
+</div>
+
+<script>
+const BASE = 137500;
+const STORAGE_KEY = 'pt_state';
+const defaults = { chests: 0, matches: [], squad: [], hour: null, boost: 1.5, inHour: false };
+let state;
+try {
+  const saved = JSON.parse(localStorage.getItem(STORAGE_KEY) || '{}');
+  state = { ...defaults, ...saved };
+  if (!Array.isArray(state.matches)) state.matches = [];
+  if (!Array.isArray(state.squad)) state.squad = [];
+  if (!Number.isFinite(state.chests) || state.chests < 0) state.chests = 0;
+} catch {
+  state = { ...defaults };
+}
+
+const $ = id => document.getElementById(id);
+const save = () => {
+  try { localStorage.setItem(STORAGE_KEY, JSON.stringify(state)); }
+  catch { alert('Your browser could not save the tracker data. Check your storage settings.'); }
+};
+const safeCount = value => Math.max(0, Math.floor(Number(value) || 0));
+const chance = (chests, rate) => (1 - Math.pow(1 - 1 / rate, chests)) * 100;
+const escapeHTML = value => String(value).replace(/[&<>"']/g, ch => ({
+  '&':'&amp;', '<':'&lt;', '>':'&gt;', '"':'&quot;', "'":'&#39;'
+}[ch]));
+
+function render() {
+  const rate = state.inHour ? Math.round(BASE / state.boost) : BASE;
+  $('chests').textContent = state.chests.toLocaleString();
+  $('chance').textContent = chance(state.chests, rate).toFixed(2) + '%';
+  $('matches').textContent = state.matches.length.toLocaleString();
+  $('rate').textContent = '1 / ' + rate.toLocaleString();
+
+  const team = state.squad.reduce((sum, mate) => sum + safeCount(mate.chests), 0) + state.chests;
+  $('squadChests').textContent = team.toLocaleString();
+  $('squadChance').textContent = chance(team, rate).toFixed(2) + '%';
+
+  $('log').replaceChildren();
+  state.matches.slice(-20).reverse().forEach(match => {
+    const row = document.createElement('div');
+    row.innerHTML = `${escapeHTML(match.date)}: <span>${safeCount(match.chests).toLocaleString()}</span> chests`;
+    $('log').appendChild(row);
+  });
+
+  $('squadList').replaceChildren();
+  state.squad.forEach((mate, index) => {
+    const row = document.createElement('div');
+    row.className = 'squadrow';
+    const name = document.createElement('input');
+    name.value = String(mate.name || '');
+    name.maxLength = 40;
+    name.setAttribute('aria-label', 'Teammate name');
+    name.addEventListener('change', () => { state.squad[index].name = name.value.trim(); save(); });
+    const count = document.createElement('input');
+    count.type = 'number'; count.min = '0'; count.step = '1';
+    count.value = safeCount(mate.chests);
+    count.setAttribute('aria-label', 'Teammate chest count');
+    count.addEventListener('change', () => { state.squad[index].chests = safeCount(count.value); save(); render(); });
+    const remove = document.createElement('button');
+    remove.type = 'button'; remove.className = 'ghost'; remove.textContent = 'Remove';
+    remove.addEventListener('click', () => { state.squad.splice(index, 1); save(); render(); });
+    row.append(name, count, remove);
+    $('squadList').appendChild(row);
+  });
+}
+
+function addChest(n) { state.chests += safeCount(n); save(); render(); }
+function logMatch() {
+  state.matches.push({ date: new Date().toLocaleString(), chests: 0 });
+  save(); render();
+}
+function quickMatch() {
+  const field = $('matchChests');
+  if (field.value === '' || Number(field.value) < 0) return alert('Enter a chest count of 0 or more.');
+  const n = safeCount(field.value);
+  state.chests += n;
+  state.matches.push({ date: new Date().toLocaleString(), chests: n });
+  field.value = '';
+  save(); render();
+}
+function setTotalFn() {
+  const field = $('setTotal');
+  if (field.value === '' || Number(field.value) < 0) return alert('Enter a total of 0 or more.');
+  state.chests = safeCount(field.value);
+  save(); render();
+}
+function addMate() {
+  const field = $('mateName');
+  const name = field.value.trim();
+  if (!name) return;
+  state.squad.push({ name, chests: 0 });
+  field.value = '';
+  save(); render();
+}
+function setHour() {
+  const date = $('hourDate').value, time = $('hourTime').value;
+  if (!date || !time) return alert('Choose a date and time first.');
+  // The selected date/time is interpreted as Eastern Time. Offset changes for daylight saving.
+  const [year, month, day] = date.split('-').map(Number);
+  const [hour, minute] = time.split(':').map(Number);
+  const guess = new Date(Date.UTC(year, month - 1, day, hour + 5, minute));
+  const dstStart = new Date(Date.UTC(year, 2, 1));
+  while (dstStart.getUTCDay() !== 0) dstStart.setUTCDate(dstStart.getUTCDate() + 1);
+  dstStart.setUTCDate(dstStart.getUTCDate() + 7); // second Sunday in March
+  const dstEnd = new Date(Date.UTC(year, 10, 1));
+  while (dstEnd.getUTCDay() !== 0) dstEnd.setUTCDate(dstEnd.getUTCDate() + 1); // first Sunday in November
+  const dateUTC = Date.UTC(year, month - 1, day);
+  const offset = dateUTC >= dstStart.getTime() && dateUTC < dstEnd.getTime() ? 4 : 5;
+  const target = new Date(Date.UTC(year, month - 1, day, hour + offset, minute));
+  state.hour = target.toISOString();
+  state.boost = Number($('boost').value);
+  save();
+  tick();
+}
+function tick() {
+  if (state.hour) {
+    const ms = new Date(state.hour).getTime() - Date.now();
+    state.inHour = ms <= 0 && ms > -2 * 60 * 60 * 1000;
+    if (ms > 0) {
+      const totalSeconds = Math.floor(ms / 1000);
+      const h = Math.floor(totalSeconds / 3600);
+      const m = Math.floor((totalSeconds % 3600) / 60);
+      const s = totalSeconds % 60;
+      $('countdown').textContent = `${h}h ${m}m ${s}s`;
+    } else if (state.inHour) {
+      $('countdown').textContent = 'LIVE — reminder window';
+    } else {
+      $('countdown').textContent = 'Time passed — set the next one';
+    }
+  } else {
+    $('countdown').textContent = 'Not set';
+  }
+  render();
+}
+$('hourDate').value = '';
+$('hourTime').value = '';
+render();
+tick();
+setInterval(tick, 1000);
+</script>
+</body>
+</html>
